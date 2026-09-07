@@ -26,7 +26,7 @@ so the final `.rsc` file ends up shorter and easier to read.
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/midi-to-mikrotik.git
+git clone https://github.com/vitokosk8/midi-to-mikrotik.git
 cd midi-to-mikrotik
 pip install -r requirements.txt
 ```
