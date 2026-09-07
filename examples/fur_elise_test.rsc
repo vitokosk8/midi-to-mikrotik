@@ -1,5 +1,5 @@
-# fur_elise_test.mid
-# Generado con midi_to_mikrotik.py
+# examples/fur_elise_test.mid
+# Generated with midi_to_mikrotik.py
 #
 # E5 (659 Hz)
 :beep frequency=659 length=235ms;

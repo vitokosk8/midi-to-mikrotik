@@ -2,20 +2,20 @@
 """
 midi_to_mikrotik.py
 ====================
-Convierte un archivo MIDI en un script RouterOS (.rsc) que reproduce
-la melodía usando el comando nativo ":beep" del beeper de las RouterBOARD.
+Converts a MIDI file into a RouterOS script (.rsc) that plays the melody
+using the native ":beep" command of the MikroTik RouterBOARD beeper.
 
-Solo usa la librería estándar + `mido` (pip install mido).
+Only uses the standard library + `mido` (pip install mido).
 
-Ejemplo de salida generado (formato compatible con RouterOS):
+Example of the generated output (RouterOS-compatible format):
 
     :beep frequency=698 length=167ms;
     :delay 177ms;
 
-Uso básico:
-    python3 midi_to_mikrotik.py melodia.mid -o melodia.rsc
+Basic usage:
+    python3 midi_to_mikrotik.py song.mid -o song.rsc
 
-Ver todas las opciones con:
+See all options with:
     python3 midi_to_mikrotik.py -h
 """
 
@@ -27,20 +27,20 @@ try:
     import mido
 except ImportError:
     sys.exit(
-        "Falta la librería 'mido'. Instálala con:\n"
+        "Missing library 'mido'. Install it with:\n"
         "    pip install mido --break-system-packages\n"
     )
 
 
 # --------------------------------------------------------------------------
-# Utilidades de conversión nota MIDI -> frecuencia
+# MIDI note -> frequency conversion utilities
 # --------------------------------------------------------------------------
 
 def midi_note_to_freq(note: int, transpose: int = 0, fine_tune_hz: float = 0.0) -> int:
-    """Convierte un número de nota MIDI (0-127) a frecuencia en Hz.
+    """Converts a MIDI note number (0-127) to a frequency in Hz.
 
-    Usa afinación estándar A440 (nota 69 = A4 = 440Hz).
-    RouterOS acepta 'frequency' como entero (Hz), así que redondeamos.
+    Uses standard A440 tuning (note 69 = A4 = 440Hz).
+    RouterOS accepts 'frequency' as an integer (Hz), so we round it.
     """
     note = note + transpose
     freq = 440.0 * (2.0 ** ((note - 69) / 12.0))
@@ -49,14 +49,14 @@ def midi_note_to_freq(note: int, transpose: int = 0, fine_tune_hz: float = 0.0) 
 
 
 # --------------------------------------------------------------------------
-# Estructuras internas
+# Internal data structures
 # --------------------------------------------------------------------------
 
 @dataclass
 class NoteEvent:
-    start: float   # segundos, absolutos
-    end: float     # segundos, absolutos
-    note: int      # número de nota MIDI
+    start: float   # seconds, absolute
+    end: float     # seconds, absolute
+    note: int      # MIDI note number
     velocity: int
     channel: int
     track_idx: int
@@ -64,14 +64,14 @@ class NoteEvent:
 
 @dataclass
 class BeepSegment:
-    """Un tramo de tiempo: o bien suena una nota (note != None) o es silencio."""
+    """A time span: either a note is sounding (note != None) or it's silence."""
     start: float
     end: float
     note: int | None
 
 
 # --------------------------------------------------------------------------
-# Paso 1: leer el MIDI y construir eventos de nota con tiempos absolutos (s)
+# Step 1: read the MIDI file and build note events with absolute times (s)
 # --------------------------------------------------------------------------
 
 def load_note_events(path: str, tracks_filter=None, channels_filter=None) -> list[NoteEvent]:
@@ -83,7 +83,7 @@ def load_note_events(path: str, tracks_filter=None, channels_filter=None) -> lis
             continue
 
         abs_time = 0.0
-        tempo = 500000  # microsegundos por negra (120 BPM), valor por defecto MIDI
+        tempo = 500000  # microseconds per quarter note (120 BPM), MIDI default
         active: dict[tuple, tuple] = {}  # (note, channel) -> (start_time, velocity)
 
         for msg in track:
@@ -112,17 +112,17 @@ def load_note_events(path: str, tracks_filter=None, channels_filter=None) -> lis
 
 
 # --------------------------------------------------------------------------
-# Paso 2: el beeper es monofónico (una sola nota a la vez).
-# Reducimos la polifonía: en cada instante suena la nota más aguda activa
-# (normalmente la melodía principal). Esto es lo mismo que hace
-# midi_to_mikrotik_converter (una sola "voz" a la vez).
+# Step 2: the beeper is monophonic (only one note at a time).
+# We reduce polyphony: at each instant, the highest active note sounds
+# (usually the main melody). This is the same approach used by
+# midi_to_mikrotik_converter (a single "voice" at a time).
 # --------------------------------------------------------------------------
 
 def reduce_to_monophonic(events: list[NoteEvent], voice: str = "highest") -> list[BeepSegment]:
     if not events:
         return []
 
-    # Construimos una línea de tiempo de cambios (note on / note off)
+    # Build a timeline of changes (note on / note off)
     time_points = sorted({e.start for e in events} | {e.end for e in events})
 
     segments: list[BeepSegment] = []
@@ -141,12 +141,12 @@ def reduce_to_monophonic(events: list[NoteEvent], voice: str = "highest") -> lis
             note = min(active, key=lambda e: e.note).note
         elif voice == "loudest":
             note = max(active, key=lambda e: e.velocity).note
-        else:  # "first" -> nota que empezó más recientemente (útil para líneas melódicas)
+        else:  # "last" -> most recently started note (useful for melodic lines)
             note = max(active, key=lambda e: e.start).note
 
         segments.append(BeepSegment(t0, t1, note))
 
-    # Fusionar segmentos consecutivos con la misma nota (o mismo silencio)
+    # Merge consecutive segments with the same note (or the same silence)
     merged: list[BeepSegment] = []
     for seg in segments:
         if merged and merged[-1].note == seg.note and abs(merged[-1].end - seg.start) < 1e-6:
@@ -158,7 +158,7 @@ def reduce_to_monophonic(events: list[NoteEvent], voice: str = "highest") -> lis
 
 
 # --------------------------------------------------------------------------
-# Paso 3: generar el script RouterOS
+# Step 3: generate the RouterOS script
 # --------------------------------------------------------------------------
 
 def generate_routeros_script(
@@ -171,11 +171,11 @@ def generate_routeros_script(
     add_comments: bool = False,
     title: str = "",
 ) -> str:
-    """speed: multiplicador de duración (1.0 = original, 0.5 = doble de rápido, 2.0 = mitad)."""
+    """speed: duration multiplier (1.0 = original, 0.5 = twice as fast, 2.0 = half speed)."""
     lines = []
     if title:
         lines.append(f"# {title}")
-    lines.append("# Generado con midi_to_mikrotik.py")
+    lines.append("# Generated with midi_to_mikrotik.py")
     lines.append("#")
 
     for seg in segments:
@@ -184,7 +184,7 @@ def generate_routeros_script(
             continue
 
         if seg.note is None:
-            # Silencio: solo delay
+            # Silence: delay only
             lines.append(f":delay {dur_ms}ms;")
             continue
 
@@ -192,7 +192,7 @@ def generate_routeros_script(
         beep_len = max(1, dur_ms - staccato_ms)
 
         if beep_len < min_len_ms:
-            # Nota demasiado corta tras el staccato: se toca sin separación
+            # Note too short after staccato: play it without a gap
             beep_len = dur_ms
 
         if add_comments:
@@ -224,39 +224,40 @@ def parse_int_list(s: str) -> set[int]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convierte un archivo MIDI en un script RouterOS (.rsc) "
-                    "para el beeper de las RouterBOARD MikroTik."
+        description="Converts a MIDI file into a RouterOS script (.rsc) "
+                    "for the MikroTik RouterBOARD beeper."
     )
-    parser.add_argument("input", help="Archivo MIDI de entrada (.mid)")
+    parser.add_argument("input", help="Input MIDI file (.mid)")
     parser.add_argument("-o", "--output", default=None,
-                         help="Archivo .rsc de salida (por defecto: mismo nombre que el input)")
+                         help="Output .rsc file (default: same name as the input)")
     parser.add_argument("-t", "--transpose", type=int, default=0,
-                         help="Semitonos a transponer (ej: -12 baja una octava)")
+                         help="Semitones to transpose (e.g. -12 drops an octave)")
     parser.add_argument("--fine-tune", type=float, default=0.0,
-                         help="Ajuste fino de frecuencia en Hz (ej: -5.3)")
+                         help="Fine frequency adjustment in Hz (e.g. -5.3)")
     parser.add_argument("--speed", type=float, default=1.0,
-                         help="Multiplicador de duración: 0.5=doble de rápido, 2.0=mitad de velocidad (default 1.0)")
+                         help="Duration multiplier: 0.5=twice as fast, 2.0=half speed (default 1.0)")
     parser.add_argument("--staccato", type=int, default=15,
-                         help="Milisegundos de silencio entre notas consecutivas, para articulación (default 15)")
+                         help="Milliseconds of silence between consecutive notes, for articulation (default 15)")
     parser.add_argument("--voice", choices=["highest", "lowest", "loudest", "last"], default="highest",
-                         help="Cómo elegir qué nota suena cuando hay varias simultáneas (default: highest = melodía aguda)")
+                         help="How to pick which note sounds when several overlap (default: highest = top melody)")
     parser.add_argument("--tracks", type=str, default=None,
-                         help="Lista de índices de pistas a incluir, ej: '0,2' (por defecto: todas)")
+                         help="List of track indices to include, e.g. '0,2' (default: all)")
     parser.add_argument("--channels", type=str, default=None,
-                         help="Lista de canales MIDI a incluir 0-15, ej: '0,1' (por defecto: todos, excluye percusión canal 9 automáticamente si se especifica)")
+                         help="List of MIDI channels to include 0-15, e.g. '0,1' (default: all; excludes the "
+                              "percussion channel 9 only if you specify it explicitly)")
     parser.add_argument("--comments", action="store_true",
-                         help="Añadir comentarios con el nombre de la nota y frecuencia")
+                         help="Add comments with the note name and frequency")
     parser.add_argument("--list-tracks", action="store_true",
-                         help="Solo lista las pistas del MIDI (nombre, nº de eventos) y termina, sin generar nada")
+                         help="Just list the MIDI's tracks (name, number of events) and exit, without generating anything")
     args = parser.parse_args()
 
     if args.list_tracks:
         mid = mido.MidiFile(args.input)
-        print(f"Archivo: {args.input}  |  ticks_per_beat={mid.ticks_per_beat}  |  duración={mid.length:.1f}s")
+        print(f"File: {args.input}  |  ticks_per_beat={mid.ticks_per_beat}  |  duration={mid.length:.1f}s")
         for i, track in enumerate(mid.tracks):
             n_notes = sum(1 for m in track if m.type == "note_on" and m.velocity > 0)
-            name = track.name or "(sin nombre)"
-            print(f"  Pista {i}: '{name}'  -  {n_notes} notas")
+            name = track.name or "(unnamed)"
+            print(f"  Track {i}: '{name}'  -  {n_notes} notes")
         return
 
     tracks_filter = parse_int_list(args.tracks) if args.tracks else None
@@ -264,7 +265,7 @@ def main():
 
     events = load_note_events(args.input, tracks_filter, channels_filter)
     if not events:
-        sys.exit("No se encontraron notas en el archivo (revisa --tracks / --channels).")
+        sys.exit("No notes found in the file (check --tracks / --channels).")
 
     segments = reduce_to_monophonic(events, voice=args.voice)
 
@@ -283,7 +284,7 @@ def main():
         f.write(script)
 
     n_beeps = script.count(":beep")
-    print(f"OK: {n_beeps} notas escritas en '{out_path}'")
+    print(f"OK: {n_beeps} notes written to '{out_path}'")
 
 
 if __name__ == "__main__":

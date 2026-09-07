@@ -1,11 +1,11 @@
 # midi-to-mikrotik
 
-Convierte archivos MIDI en scripts RouterOS (`.rsc`) que reproducen la
-melodía en el **beeper** de las RouterBOARD MikroTik, usando los comandos
-nativos `:beep` y `:delay`.
+Converts MIDI files into RouterOS scripts (`.rsc`) that play the melody
+on the **beeper** of MikroTik RouterBOARD devices, using the native
+`:beep` and `:delay` commands.
 
-Escrito en Python puro + [`mido`](https://github.com/mido/mido) — sin
-dependencias de compilación ni librerías externas de audio.
+Written in pure Python + [`mido`](https://github.com/mido/mido) — no
+compiled dependencies or external audio libraries required.
 
 ```
 :beep frequency=659 length=235ms;
@@ -14,108 +14,108 @@ dependencias de compilación ni librerías externas de audio.
 :delay 250ms;
 ```
 
-## Por qué
+## Why
 
-Ya existe [midi_to_mikrotik_converter](https://github.com/altucor/midi_to_mikrotik_converter)
-de altucor (C++), y en el [foro de MikroTik](https://forum.mikrotik.com/t/some-music/95593)
-hay varios scripts hechos a mano. Este proyecto hace lo mismo pero en Python
-puro, calculando las frecuencias directamente (afinación estándar A440) en
-vez de reconstruir tablas de notas dentro del propio script RouterOS —
-así el `.rsc` final queda más corto y fácil de leer.
+There's already [midi_to_mikrotik_converter](https://github.com/altucor/midi_to_mikrotik_converter)
+by altucor (C++), and the [MikroTik forum](https://forum.mikrotik.com/t/some-music/95593)
+has several hand-written scripts. This project does the same thing in
+pure Python, computing frequencies directly (standard A440 tuning)
+instead of rebuilding note tables inside the RouterOS script itself —
+so the final `.rsc` file ends up shorter and easier to read.
 
-## Instalación
+## Installation
 
 ```bash
-git clone https://github.com/<tu-usuario>/midi-to-mikrotik.git
+git clone https://github.com/<your-username>/midi-to-mikrotik.git
 cd midi-to-mikrotik
 pip install -r requirements.txt
 ```
 
-## Uso
+## Usage
 
 ```bash
-python3 midi_to_mikrotik.py melodia.mid -o melodia.rsc
+python3 midi_to_mikrotik.py song.mid -o song.rsc
 ```
 
-En el router:
+On the router:
 
 ```
-/import file=melodia.rsc
+/import file=song.rsc
 ```
 
-(o pega el contenido directamente en el terminal, o dentro de un
+(or paste the contents directly into the terminal, or inside a
 `/system script`).
 
-### Inspeccionar las pistas antes de convertir
+### Inspecting tracks before converting
 
-El beeper es **monofónico**: solo suena una nota a la vez. La mayoría de
-MIDI tienen varias pistas (melodía, bajo, batería...), así que conviene
-elegir solo la que interesa:
-
-```bash
-python3 midi_to_mikrotik.py melodia.mid --list-tracks
-```
-
-```
-Archivo: melodia.mid  |  ticks_per_beat=480  |  duración=124.3s
-  Pista 0: 'Piano melodía'  -  212 notas
-  Pista 1: 'Bajo'           -  98 notas
-  Pista 2: 'Batería'        -  340 notas
-```
+The beeper is **monophonic**: it can only play one note at a time. Most
+MIDI files have several tracks (melody, bass, drums...), so it's worth
+picking only the one you want:
 
 ```bash
-python3 midi_to_mikrotik.py melodia.mid --tracks 0 -o melodia.rsc
+python3 midi_to_mikrotik.py song.mid --list-tracks
 ```
 
-### Opciones
+```
+File: song.mid  |  ticks_per_beat=480  |  duration=124.3s
+  Track 0: 'Piano melody'  -  212 notes
+  Track 1: 'Bass'          -  98 notes
+  Track 2: 'Drums'         -  340 notes
+```
 
-| Opción              | Descripción                                                                                    |
-|----------------------|-------------------------------------------------------------------------------------------------|
-| `-o, --output`       | Archivo `.rsc` de salida                                                                        |
-| `--tracks 0,2`       | Incluir solo esas pistas del MIDI                                                               |
-| `--channels 0,1`     | Incluir solo esos canales MIDI (útil para excluir batería, normalmente en canal 9)               |
-| `-t, --transpose N`  | Transponer N semitonos (ej. `-12` para bajar una octava)                                        |
-| `--fine-tune HZ`     | Corrección fina de frecuencia en Hz, por si tu beeper suena algo desafinado                      |
-| `--speed X`          | `0.5` = el doble de rápido · `2.0` = la mitad de velocidad                                      |
-| `--staccato MS`      | Milisegundos de silencio entre notas consecutivas, para articulación (default `15`)              |
-| `--voice`            | Cómo resolver acordes/polifonía: `highest` (default), `lowest`, `loudest`, `last`               |
-| `--comments`         | Añade comentarios con nombre de nota (`C4`, `A#3`...) y frecuencia en el `.rsc`                  |
-| `--list-tracks`      | Solo lista las pistas del MIDI y termina                                                        |
+```bash
+python3 midi_to_mikrotik.py song.mid --tracks 0 -o song.rsc
+```
 
-## Ejemplo
+### Options
 
-En [`examples/`](examples/) hay un MIDI de prueba y su `.rsc` generado:
+| Option               | Description                                                                                      |
+|----------------------|----------------------------------------------------------------------------------------------------|
+| `-o, --output`       | Output `.rsc` file                                                                                  |
+| `--tracks 0,2`       | Include only these MIDI tracks                                                                      |
+| `--channels 0,1`     | Include only these MIDI channels (useful for excluding drums, usually on channel 9)                 |
+| `-t, --transpose N`  | Transpose by N semitones (e.g. `-12` to drop an octave)                                             |
+| `--fine-tune HZ`     | Fine frequency correction in Hz, in case your beeper sounds slightly out of tune                    |
+| `--speed X`          | `0.5` = twice as fast · `2.0` = half speed                                                          |
+| `--staccato MS`      | Milliseconds of silence between consecutive notes, for articulation (default `15`)                  |
+| `--voice`            | How to resolve chords/polyphony: `highest` (default), `lowest`, `loudest`, `last`                   |
+| `--comments`         | Add comments with the note name (`C4`, `A#3`...) and frequency in the `.rsc`                        |
+| `--list-tracks`      | Just list the MIDI's tracks and exit                                                                |
+
+## Example
+
+[`examples/`](examples/) contains a test MIDI and its generated `.rsc`:
 
 ```bash
 python3 midi_to_mikrotik.py examples/fur_elise_test.mid -o out.rsc --comments
 ```
 
-## Cómo funciona
+## How it works
 
-1. **Lectura del MIDI** — con `mido`, convierte los ticks de cada pista a
-   segundos usando el mapa de tempo real del archivo.
-2. **Reducción a monofónico** — cuando hay notas simultáneas (acordes,
-   varias pistas solapadas), se elige una sola nota por instante según
-   `--voice` (por defecto, la más aguda — normalmente la melodía).
-3. **Cálculo de frecuencia** — `freq = 440 * 2^((nota-69)/12)` (afinación
-   estándar A440), redondeado a Hz entero.
-4. **Generación del script** — cada nota se traduce a un par
-   `:beep` + `:delay`; los silencios del MIDI, a `:delay` solo.
+1. **Reading the MIDI file** — using `mido`, converts each track's ticks
+   to seconds using the file's actual tempo map.
+2. **Reducing to monophonic** — when there are simultaneous notes
+   (chords, overlapping tracks), a single note is chosen per instant
+   based on `--voice` (default: the highest one — usually the melody).
+3. **Frequency calculation** — `freq = 440 * 2^((note-69)/12)` (standard
+   A440 tuning), rounded to an integer Hz value.
+4. **Script generation** — each note becomes a `:beep` + `:delay` pair;
+   silences in the MIDI become a `:delay` alone.
 
-## Notas / limitaciones
+## Notes / limitations
 
-- No todas las RouterBOARD tienen beeper físico (p. ej. el RB4011 no lo
-  tiene).
-- El beeper solo reproduce una nota a la vez — no hay polifonía real en
-  el hardware, así que acordes se simplifican a una sola voz.
-- Probado en RB951 (MikroTourette).
+- Not every RouterBOARD has a physical beeper (e.g. the RB4011 doesn't
+  have one).
+- The beeper only plays one note at a time — there's no real polyphony
+  in the hardware, so chords get simplified to a single voice.
+- Tested on an RB951 (MikroTourette).
 
-## Créditos / inspiración
+## Credits / inspiration
 
 - [altucor/midi_to_mikrotik_converter](https://github.com/altucor/midi_to_mikrotik_converter)
-- Hilo del foro MikroTik ["Some Music"](https://forum.mikrotik.com/t/some-music/95593)
-  (MikroTourette, MxW y otros)
+- MikroTik forum thread ["Some Music"](https://forum.mikrotik.com/t/some-music/95593)
+  (MikroTourette, MxW, and others)
 
-## Licencia
+## License
 
-MIT — ver [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
